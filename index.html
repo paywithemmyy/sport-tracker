@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Emmy Rollover Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link rel="stylesheet" href="roll.css">
+<link rel="shortcut icon" href="download.png" type="image/x-icon">
+</head>
+<body>
+<canvas id="confetti-canvas"></canvas>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo-mark">E</div>
+    <div><div class="hdr-title">Emmy Rollover Tracker</div><div class="hdr-sub">Smart staking · Multi-plan · History · Stop-loss</div></div>
+  </div>
+  <div class="header-right">
+    <button class="btn btn-ghost" id="theme-btn" onclick="toggleTheme()">☀ Light</button>
+    <button class="btn btn-ghost" onclick="exportCSV()">↓ CSV</button>
+    <button class="btn btn-purple" onclick="showBragCard()">🏆 Brag</button>
+    <button class="btn btn-danger" onclick="clearSave()">Reset</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchTab('tracker')">Tracker</button>
+    <button class="nav-tab" onclick="switchTab('summary')">Summary</button>
+    <button class="nav-tab" onclick="switchTab('history')">History</button>
+    <button class="nav-tab" onclick="switchTab('calculator')">Target Calc</button>
+    <button class="nav-tab" onclick="switchTab('settings')">Settings</button>
+  </div>
+
+  <!-- ===== TRACKER ===== -->
+  <div class="panel active" id="panel-tracker">
+    <div id="quote-wrap"></div>
+    <div class="plan-tabs" id="plan-tabs"></div>
+    <div class="config-panel">
+      <div class="panel-label">Plan setup</div>
+      <div class="config-grid">
+        <div class="cfg-group"><label>Starting stake (₦)</label><input type="number" id="startStake" value="4000" min="100"/></div>
+        <div class="cfg-group"><label>Days</label><input type="number" id="numDays" value="7" min="1" max="30"/></div>
+        <div class="cfg-group"><label>Stop-loss %</label><input type="number" id="stopLossPct" value="50" min="0" max="99"/></div>
+        <button class="btn btn-gold" onclick="confirmInit()">Generate plan</button>
+        <button class="btn btn-ghost" onclick="addPlan()">+ New plan</button>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Safe mode — reduce stake after a loss</span>
+        <label class="toggle"><input type="checkbox" id="safeMode" checked/><span class="t-sl"></span></label>
+        <span class="pill pill-green" id="safeLabel">ON</span>
+      </div>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="m-lbl">Start</div><div class="m-val mono" id="m-start">₦4,000</div></div>
+      <div class="metric-card"><div class="m-lbl">Balance</div><div class="m-val c-green mono" id="m-balance">₦4,000</div></div>
+      <div class="metric-card"><div class="m-lbl">Target</div><div class="m-val c-gold mono" id="m-target">—</div></div>
+      <div class="metric-card"><div class="m-lbl">Profit/Loss</div><div class="m-val c-green mono" id="m-profit">+₦0</div></div>
+      <div class="metric-card"><div class="m-lbl">Streak</div><div class="m-val c-blue" id="m-streak">—</div></div>
+      <div class="metric-card"><div class="m-lbl">Progress</div><div class="m-val c-amber" id="m-day">1/7</div></div>
+    </div>
+
+    <div class="bankroll-gauge" id="bankroll-gauge">
+      <div style="flex-shrink:0;"><div class="gauge-label">Bankroll health</div><div class="gauge-status" id="gauge-status">Healthy</div></div>
+      <div style="flex:1;min-width:160px;"><div class="gauge-track"><div class="gauge-fill" id="gauge-fill" style="width:100%;background:var(--green);"></div></div></div>
+      <div style="font-size:11px;color:var(--text3);" id="gauge-pct">100%</div>
+    </div>
+
+    <div class="alert-box" id="stoploss-alert">⚠ Stop-loss triggered — balance dropped below your threshold. Consider pausing.</div>
+
+    <div class="chart-card">
+      <div class="card-title">Week at a glance</div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+
+    <div class="today-card" id="today-card">
+      <div class="today-header">
+        <span class="today-title">Today's bet — Day <span id="tc-day">1</span></span>
+        <span class="streak-chip win" id="streak-chip" style="display:none;"></span>
+      </div>
+      <div class="today-body">
+        <div class="today-stats">
+          <div class="stat-block"><div class="s-lbl">Stake</div><div class="s-val" id="tc-stake">₦4,000</div></div>
+          <div class="stat-block"><div class="s-lbl">Odds</div><input class="odds-input" type="number" id="tc-odds-input" min="1.01" max="10" step="0.01" value="1.35" oninput="recalcWin()"/></div>
+          <div class="stat-block"><div class="s-lbl">Potential win</div><div class="s-val green" id="tc-win">₦5,400</div></div>
+          <div class="stat-block"><div class="s-lbl">Daily profit</div><div class="s-val gold" id="tc-profit">₦1,400</div></div>
+          <div class="stat-block note-block">
+            <div class="s-lbl">Match / note &amp; sport</div>
+            <div class="note-row">
+              <input class="note-input" type="text" id="tc-note" placeholder="e.g. Arsenal to win" onkeydown="if(event.key==='Enter'){saveNote();}"/>
+              <select id="tc-sport" style="width:110px;font-size:12px;">
+                <option value="">Sport</option>
+                <option value="⚽ Football">⚽ Football</option>
+                <option value="🏀 Basketball">🏀 Basketball</option>
+                <option value="🎾 Tennis">🎾 Tennis</option>
+                <option value="🏈 American Football">🏈 Am. Football</option>
+                <option value="⚾ Baseball">⚾ Baseball</option>
+                <option value="🏏 Cricket">🏏 Cricket</option>
+                <option value="🥊 Boxing/MMA">🥊 Boxing/MMA</option>
+                <option value="🏐 Volleyball">🏐 Volleyball</option>
+                <option value="🎱 Other">🎱 Other</option>
+              </select>
+              <button class="btn btn-ghost" onclick="saveNote()" style="padding:7px 10px;font-size:12px;">Save</button>
+            </div>
+            <div class="note-saved" id="note-saved">✓ Saved</div>
+          </div>
+        </div>
+        <div class="action-col">
+          <button class="btn btn-win" onclick="markResult('win')">✓ Won</button>
+          <button class="btn btn-loss" onclick="markResult('loss')">✗ Lost</button>
+          <button class="btn btn-undo" onclick="undoLast()">↩ Undo</button>
+        </div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-meta"><span id="prog-label">Day 1 of 7</span><span id="prog-pct">14%</span></div>
+        <div class="progress-track"><div class="progress-fill" id="prog-fill" style="width:5%;"></div></div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="card-title">Balance over time</div>
+      <div style="position:relative;width:100%;height:200px;"><canvas id="balChart"></canvas></div>
+    </div>
+
+    <div class="tbl-card">
+      <div class="tbl-header"><div class="card-title" style="margin:0;">Full schedule</div></div>
+      <table>
+        <thead><tr><th>Day</th><th>Stake</th><th>Odds</th><th>Win</th><th>Balance</th><th>Profit</th><th>Sport</th><th>Note</th><th>Status</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== SUMMARY ===== -->
+  <div class="panel" id="panel-summary">
+    <div class="report-grid" id="report-grid"></div>
+    <div class="chart-card">
+      <div class="card-title">Smart staking vs all-in comparison</div>
+      <div id="comparison-bar"></div>
+    </div>
+    <div class="chart-card">
+      <div class="card-title">Performance by sport</div>
+      <div id="sport-breakdown"></div>
+    </div>
+    <div class="chart-card">
+      <div class="card-title">Odds history &amp; suggested range</div>
+      <div id="odds-history-wrap"></div>
+    </div>
+    <div class="chart-card">
+      <div class="card-title">Simulate rest of week</div>
+      <button class="btn btn-blue" onclick="runSimulation()">Run simulation based on current win rate</button>
+      <div id="sim-result" style="margin-top:12px;font-size:13px;color:var(--text2);"></div>
+    </div>
+  </div>
+
+  <!-- ===== HISTORY ===== -->
+  <div class="panel" id="panel-history">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:10px;">
+      <div style="font-size:13px;color:var(--text2);">Completed plans are archived here. Your all-time stats live below.</div>
+      <button class="btn btn-gold" onclick="archiveCurrentPlan()">Archive current plan</button>
+    </div>
+    <div class="report-grid" id="alltime-stats" style="margin-bottom:1.5rem;"></div>
+    <div id="archive-list"><div style="font-size:13px;color:var(--text3);padding:1rem 0;">No archived plans yet. Complete and archive a plan to see history.</div></div>
+  </div>
+
+  <!-- ===== CALCULATOR ===== -->
+  <div class="panel" id="panel-calculator">
+    <div class="config-panel">
+      <div class="panel-label">Target calculator</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:1rem;">Enter your target and see exactly what you need each day.</p>
+      <div class="config-grid">
+        <div class="cfg-group"><label>Starting stake (₦)</label><input type="number" id="calc-start" value="4000" min="100"/></div>
+        <div class="cfg-group"><label>Target (₦)</label><input type="number" id="calc-target" value="20000" min="100"/></div>
+        <div class="cfg-group"><label>Days</label><input type="number" id="calc-days" value="7" min="1" max="60"/></div>
+        <div class="cfg-group"><label>Odds</label><input type="number" id="calc-odds" value="1.35" min="1.01" step="0.01"/></div>
+        <button class="btn btn-gold" onclick="runCalc()">Calculate</button>
+      </div>
+      <div class="calc-result" id="calc-result" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- ===== SETTINGS ===== -->
+  <div class="panel" id="panel-settings">
+    <div class="config-panel">
+      <div class="panel-label">Daily reminder</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:1rem;">Set a time to receive a browser notification reminding you to place your bet.</p>
+      <div class="config-grid">
+        <div class="cfg-group"><label>Reminder time</label><input type="time" id="reminder-time" value="18:00" style="width:130px;"/></div>
+        <button class="btn btn-gold" onclick="setReminder()">Enable reminder</button>
+        <button class="btn btn-ghost" onclick="clearReminder()">Clear</button>
+      </div>
+      <div id="reminder-status" style="font-size:12px;color:var(--text3);margin-top:.75rem;"></div>
+    </div>
+    <div class="config-panel">
+      <div class="panel-label">Motivational quotes</div>
+      <div class="toggle-row" style="border:none;padding:0;margin:0;">
+        <span class="toggle-label">Show daily quote on tracker page</span>
+        <label class="toggle"><input type="checkbox" id="quoteToggle" checked onchange="saveSettings()"/><span class="t-sl"></span></label>
+      </div>
+    </div>
+    <div class="config-panel">
+      <div class="panel-label">About</div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;">Emmy Rollover Tracker v3.0 — built for smart bettors who track every move.<br>All data is stored locally in your browser. No data is sent anywhere.</p>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div style="text-align:center;padding:1.5rem;border-top:1px solid var(--border);font-size:12px;color:var(--text3);margin-top:1rem;">
+  Built by <span style="color:var(--gold);font-weight:600;">paywithemmy</span> &nbsp;&nbsp;&middot;&nbsp;&nbsp; <a href="https://twitter.com/whyemmyy" target="_blank" style="color:var(--blue);text-decoration:none;font-weight:600;">𝕏 @whyemmyy</a> &nbsp;&middot;&nbsp; <span style="color:var(--red);">Gamble Responsibly</span>
+</div>
+
+<!-- BRAG MODAL -->
+<div id="brag-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:500;align-items:center;justify-content:center;padding:1rem;">
+  <div style="max-width:480px;width:100%;">
+    <div class="brag-card" id="brag-inner"></div>
+    <div style="display:flex;gap:10px;margin-top:12px;justify-content:center;">
+      <button class="btn btn-ghost" onclick="closeBrag()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- GAMBLE MODAL -->
+<div id="gamble-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.82);z-index:1000;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:#111520;border:1px solid rgba(201,168,76,0.4);border-radius:16px;max-width:420px;width:100%;padding:2rem;text-align:center;">
+    <div style="width:48px;height:48px;background:rgba(245,166,35,0.15);border:1px solid rgba(245,166,35,0.4);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;font-size:22px;">⚠</div>
+    <h2 style="font-family:'DM Serif Display',serif;font-size:22px;color:#e8eaf0;margin-bottom:.6rem;">Gamble Responsibly</h2>
+    <p style="font-size:13px;color:#8a90a4;line-height:1.7;margin-bottom:1.4rem;">This tracker helps manage your rollover strategy. Betting involves real financial risk. Only stake what you can afford to lose. If gambling stops being fun, please seek help.</p>
+    <button onclick="closeModal()" style="background:#c9a84c;color:#0a0d14;border:none;border-radius:8px;padding:11px 28px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;width:100%;">I understand — Let's go</button>
+  </div>
+</div>
+
+<script src="roll.js"></script>
+</body>
+</html>
